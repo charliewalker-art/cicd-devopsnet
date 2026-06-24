@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="devopsnet.Tests/devopsnet.Tests.csproj" />
+  <Project Path="devopsnet/devopsnet.csproj" />
+</Solution>
