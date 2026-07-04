@@ -1,0 +1,76 @@
+﻿using System;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+using devopsnet.Options;
+using Microsoft.Extensions.Options;
+
+namespace devopsnet.Services.archive;
+
+public class JenkinsPipelineService
+{
+    private readonly HttpClient _httpClient;
+    private readonly JenkinsOptions _options;
+
+    public JenkinsPipelineService(HttpClient httpClient, IOptions<JenkinsOptions> options)
+    {
+        _httpClient = httpClient;
+        _options = options.Value;
+    }
+
+    public async Task CreateJenkinsJobAsync(string username, string jobName, string gitUrl, string branch, string githubToken)
+    {
+        // On prépare l'URL Git authentifiée pour Jenkins
+        string authenticatedGitUrl = gitUrl.Replace("https://", $"https://{githubToken}@");
+
+        // Script Groovy pour créer un Pipeline Job classique de type "WorkflowJob" dans le dossier de l'utilisateur
+        var groovyScript = $@"
+import jenkins.model.Jenkins
+import colcloudbees.hudson.plugins.folder.Folder
+import org.jenkinsci.plugins.workflow.job.WorkflowJob
+import org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition
+import hudson.plugins.git.GitSCM
+import hudson.plugins.git.UserRemoteConfig
+import hudson.plugins.git.BranchSpec
+
+def jenkins = Jenkins.get()
+
+// 1. Récupérer le dossier privé de l'utilisateur
+def folder = jenkins.getItem('{username}')
+if (folder == null) {{
+    throw new Exception('Dossier utilisateur introuvable')
+}}
+
+// 2. Créer le Job de Pipeline s'il n'existe pas déjà
+def fullJobName = '{username}/{jobName}'
+def job = jenkins.getItemByFullName(fullJobName)
+
+if (job == null) {{
+    job = folder.createProject(WorkflowJob.class, '{jobName}')
+}}
+
+// 3. Configurer le Job pour pointer sur le Git et la branche avec le Jenkinsfile existant
+def remoteConfig = new UserRemoteConfig('{authenticatedGitUrl}', null, null, null)
+def branchSpec = new BranchSpec('*/{branch}')
+def scm = new GitSCM([remoteConfig], [branchSpec], false, [], null, null, [])
+
+// CpsScmFlowDefinition dit à Jenkins d'aller lire le 'Jenkinsfile' à la racine du dépôt
+job.setDefinition(new CpsScmFlowDefinition(scm, 'Jenkinsfile'))
+job.save()
+print 'SUCCESS'
+";
+
+        // Exécution du script via l'API Jenkins
+        var request = new HttpRequestMessage(HttpMethod.Post, $"{_options.BaseUrl}/scriptText");
+        request.Content = new StringContent($"script={Uri.EscapeDataString(groovyScript)}", Encoding.UTF8, "application/x-www-form-urlencoded");
+
+        var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadAsStringAsync();
+        if (!result.Contains("SUCCESS"))
+        {
+            throw new InvalidOperationException($"Échec de la création du job Jenkins : {result}");
+        }
+    }
+}

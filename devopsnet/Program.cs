@@ -8,7 +8,6 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 Env.Load();
-
 var builder = WebApplication.CreateBuilder(args);
 
 // --- Configuration : injecte les variables d'environnement chargées depuis .env ---
@@ -20,25 +19,42 @@ builder.Configuration["GitHub:ClientSecret"] = Environment.GetEnvironmentVariabl
 builder.Configuration["GitHub:CallbackUrl"] = Environment.GetEnvironmentVariable("GITHUB_CALLBACK_URL");
 builder.Configuration["Cors:AllowedOrigin"] = Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGIN");
 
+// Ajout des valeurs .env de Jenkins
+builder.Configuration["Jenkins:BaseUrl"] = Environment.GetEnvironmentVariable("JENKINS_BASE_URL");
+//builder.Configuration["Jenkins:JobName"] = Environment.GetEnvironmentVariable("JENKINS_JOB_NAME");
+builder.Configuration["Jenkins:Username"] = Environment.GetEnvironmentVariable("JENKINS_USERNAME");
+builder.Configuration["Jenkins:ApiToken"] = Environment.GetEnvironmentVariable("JENKINS_API_TOKEN");
+
+// Ajout des valeurs .env de Nexus
+builder.Configuration["Nexus:Registry"] = Environment.GetEnvironmentVariable("NEXUS_REGISTRY");
+builder.Configuration["Nexus:CredentialsId"] = Environment.GetEnvironmentVariable("NEXUS_CREDENTIALS_ID");
+
+
 // --- Base de données ---
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration["ConnectionStrings:Postgres"]));
 
 // --- Options fortement typées ---
 builder.Services.Configure<GitHubOptions>(builder.Configuration.GetSection(GitHubOptions.SectionName));
+builder.Services.Configure<JenkinsOptions>(builder.Configuration.GetSection(JenkinsOptions.SectionName));
+builder.Services.Configure<NexusOptions>(builder.Configuration.GetSection(NexusOptions.SectionName));
+
 
 // --- Data Protection (chiffrement du token GitHub) ---
 builder.Services.AddDataProtection();
 
-// --- HttpClient pour les Services qui appellent l'API GitHub ---
+// --- HttpClient pour les Services qui appellent les APIs ---
 builder.Services.AddHttpClient<GitHubAuthService>();
 builder.Services.AddHttpClient<GitHubRepositoryService>();
+builder.Services.AddHttpClient<JenkinsManagerService>(); // 
 
 // --- Services métier ---
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<GitCloneService>();
+builder.Services.AddScoped<PipelineAnalysisService>();
+builder.Services.AddScoped<JenkinsManagerService>(); // ✅ Uniquement le gestionnaire centralisé
 
 // --- Authentification JWT ---
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]
@@ -60,9 +76,6 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
     };
 
-    // --- AJOUT : permet à GitHubAuthController.Login d'être atteint par une vraie
-    // navigation de navigateur (window.location.href), qui ne peut pas envoyer
-    // de header Authorization. Le token est alors lu depuis le query string.
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
@@ -91,15 +104,16 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/openapi/v1.json", "devopsnet API v1");
+    });
 }
 
 app.UseHttpsRedirection();
-
 app.UseCors(CorsServiceExtensions.PolicyName);
-
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();

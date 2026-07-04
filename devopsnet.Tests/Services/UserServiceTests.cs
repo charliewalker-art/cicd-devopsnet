@@ -22,7 +22,7 @@ public class UserServiceTests
     {
         // Arrange
         var context = CreateInMemoryContext();
-        var service = new UserService(context);
+        var service = new UserService(context, null);
         var dto = new UserCreateDto
         {
             Username = "charlie",
@@ -44,7 +44,7 @@ public class UserServiceTests
     {
         // Arrange
         var context = CreateInMemoryContext();
-        var service = new UserService(context);
+        var service = new UserService(context, null);
 
         await service.CreateAsync(new UserCreateDto
         {
@@ -70,7 +70,7 @@ public class UserServiceTests
     {
         // Arrange
         var context = CreateInMemoryContext();
-        var service = new UserService(context);
+        var service = new UserService(context, null);
 
         await service.CreateAsync(new UserCreateDto
         {
@@ -96,7 +96,7 @@ public class UserServiceTests
     {
         // Arrange
         var context = CreateInMemoryContext();
-        var service = new UserService(context);
+        var service = new UserService(context, null);
         var dto = new UserCreateDto
         {
             Username = "charlie",

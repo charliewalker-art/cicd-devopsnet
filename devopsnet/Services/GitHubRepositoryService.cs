@@ -1,4 +1,5 @@
 ﻿using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using devopsnet.Dto;
 
@@ -20,7 +21,13 @@ public class GitHubRepositoryService
         request.Headers.UserAgent.Add(new ProductInfoHeaderValue("devopsnet", "1.0"));
 
         var response = await _httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
+
+        // Correction ici : On intercepte l'erreur sans faire crasher l'application
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException($"L'API GitHub a refusé l'accès ({response.StatusCode}) : {errorContent}");
+        }
 
         var repos = await response.Content.ReadFromJsonAsync<JsonElement>();
 
@@ -39,4 +46,8 @@ public class GitHubRepositoryService
 
         return result;
     }
+
+
+
+
 }
