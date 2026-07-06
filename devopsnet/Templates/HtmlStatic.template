@@ -1,13 +1,11 @@
 ﻿node {
     stage('1. Checkout SCM') {
-        // Syntaxe simplifiée et sécurisée, validée à 100% par le Sandbox Jenkins
         git branch: '{BRANCH}', 
             credentialsId: '{GITHUB_CREDENTIALS_ID}', 
             url: '{GIT_URL}'
     }
 
     stage('2. Preparation Dockerfile') {
-        // Le PaaS génère un Dockerfile qui copie directement les fichiers statiques
         writeFile file: 'Dockerfile', text: '''
 FROM nginx:alpine
 COPY . /usr/share/nginx/html
@@ -17,13 +15,20 @@ CMD ["nginx", "-g", "daemon off;"]
     }
 
     stage('3. Build de l\'image Docker') {
-        sh "docker build -t {NEXUS_REGISTRY}/{JOB_NAME}:latest ."
+        // On crée deux tags d'un coup : le numéro de build unique et le latest
+        sh "docker build -t {NEXUS_REGISTRY}/{JOB_NAME}:\${BUILD_NUMBER} -t {NEXUS_REGISTRY}/{JOB_NAME}:latest ."
     }
 
     stage('4. Push vers Nexus') {
         withCredentials([usernamePassword(credentialsId: '{NEXUS_CREDENTIALS_ID}', passwordVariable: 'NEXUS_PASS', usernameVariable: 'NEXUS_USER')]) {
             sh "docker login -u \$NEXUS_USER -p \$NEXUS_PASS {NEXUS_REGISTRY}"
+            
+            // On pousse le tag incrémental (ex: v1, v2)
+            sh "docker push {NEXUS_REGISTRY}/{JOB_NAME}:\${BUILD_NUMBER}"
+            
+            // On pousse/écrase le tag latest avec la nouvelle version
             sh "docker push {NEXUS_REGISTRY}/{JOB_NAME}:latest"
+            
             sh "docker logout {NEXUS_REGISTRY}"
         }
     }

@@ -28,6 +28,19 @@ builder.Configuration["Jenkins:ApiToken"] = Environment.GetEnvironmentVariable("
 // Ajout des valeurs .env de Nexus
 builder.Configuration["Nexus:Registry"] = Environment.GetEnvironmentVariable("NEXUS_REGISTRY");
 builder.Configuration["Nexus:CredentialsId"] = Environment.GetEnvironmentVariable("NEXUS_CREDENTIALS_ID");
+builder.Configuration["Nexus:BaseUrl"] = Environment.GetEnvironmentVariable("NEXUS_BASE_URL");
+builder.Configuration["Nexus:Repository"] = Environment.GetEnvironmentVariable("NEXUS_REPOSITORY");
+builder.Configuration["Nexus:Username"] = Environment.GetEnvironmentVariable("NEXUS_USERNAME");
+builder.Configuration["Nexus:Password"] = Environment.GetEnvironmentVariable("NEXUS_PASSWORD");
+
+// Ajout des valeurs .env d'Argo CD
+builder.Configuration["ArgoCD:BaseUrl"] = Environment.GetEnvironmentVariable("ARGOCD_URL");
+builder.Configuration["ArgoCD:Token"] = Environment.GetEnvironmentVariable("ARGOCD_TOKEN");
+
+
+builder.Configuration["ArgoCD:LocalRepoUrl"] = Environment.GetEnvironmentVariable("ARGOCD_LOCAL_REPO_URL");
+builder.Configuration["ArgoCD:LocalRepoPath"] = Environment.GetEnvironmentVariable("ARGOCD_LOCAL_REPO_PATH");
+builder.Configuration["K3S_NODEPORT_START"] = Environment.GetEnvironmentVariable("K3S_NODEPORT_START");
 
 
 // --- Base de données ---
@@ -39,14 +52,24 @@ builder.Services.Configure<GitHubOptions>(builder.Configuration.GetSection(GitHu
 builder.Services.Configure<JenkinsOptions>(builder.Configuration.GetSection(JenkinsOptions.SectionName));
 builder.Services.Configure<NexusOptions>(builder.Configuration.GetSection(NexusOptions.SectionName));
 
-
 // --- Data Protection (chiffrement du token GitHub) ---
 builder.Services.AddDataProtection();
 
 // --- HttpClient pour les Services qui appellent les APIs ---
 builder.Services.AddHttpClient<GitHubAuthService>();
 builder.Services.AddHttpClient<GitHubRepositoryService>();
-builder.Services.AddHttpClient<JenkinsManagerService>(); // 
+builder.Services.AddHttpClient<JenkinsQueryService>();
+builder.Services.AddHttpClient<JenkinsManagerService>();
+builder.Services.AddHttpClient<NexusService>();
+builder.Services.AddScoped<IGitAutomationService, GitAutomationService>();
+
+// Enregistrement d'Argo CD avec gestion du certificat SSL auto-signé de ta VM locale
+builder.Services.AddHttpClient<IArgoCDService, ArgoCDService>()
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    // Ignore l'erreur du certificat SSL non signé (indispensable pour ton HTTPS sur 192.168.196.5)
+    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+});
 
 // --- Services métier ---
 builder.Services.AddScoped<UserService>();
@@ -54,7 +77,7 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<GitCloneService>();
 builder.Services.AddScoped<PipelineAnalysisService>();
-builder.Services.AddScoped<JenkinsManagerService>(); // ✅ Uniquement le gestionnaire centralisé
+builder.Services.AddScoped<JenkinsManagerService>(); // Uniquement le gestionnaire centralisé
 
 // --- Authentification JWT ---
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]

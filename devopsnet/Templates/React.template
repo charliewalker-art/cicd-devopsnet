@@ -6,9 +6,7 @@
     }
 
     stage('2. Preparation Dockerfile Multi-Stage') {
-        // Le Dockerfile s'occupe maintenant de TOUT : build Node + serveur Nginx final
         writeFile file: 'Dockerfile', text: """
-# Étape 1 : Build de l'application React
 FROM node:{NODE_VERSION}-alpine AS build-stage
 WORKDIR /app
 COPY package*.json ./
@@ -16,7 +14,6 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-# Étape 2 : Serveur de production Nginx
 FROM nginx:alpine
 COPY --from=build-stage /app/{OUTPUT_DIR} /usr/share/nginx/html
 EXPOSE 80
@@ -25,14 +22,18 @@ CMD ["nginx", "-g", "daemon off;"]
     }
 
     stage('3. Build de l\'image Docker') {
-        // C'est ici que le build de l'application se fait, à l'intérieur de Docker de façon isolée
-        sh "docker build -t {NEXUS_REGISTRY}/{JOB_NAME}:latest ."
+        // Double tag avec la variable d'environnement Jenkins ${BUILD_NUMBER}
+        sh "docker build -t {NEXUS_REGISTRY}/{JOB_NAME}:\${BUILD_NUMBER} -t {NEXUS_REGISTRY}/{JOB_NAME}:latest ."
     }
 
     stage('4. Push vers Nexus') {
         withCredentials([usernamePassword(credentialsId: '{NEXUS_CREDENTIALS_ID}', passwordVariable: 'NEXUS_PASS', usernameVariable: 'NEXUS_USER')]) {
             sh "docker login -u \$NEXUS_USER -p \$NEXUS_PASS {NEXUS_REGISTRY}"
+            
+            // Envoi des deux images distinctes sur Nexus
+            sh "docker push {NEXUS_REGISTRY}/{JOB_NAME}:\${BUILD_NUMBER}"
             sh "docker push {NEXUS_REGISTRY}/{JOB_NAME}:latest"
+            
             sh "docker logout {NEXUS_REGISTRY}"
         }
     }

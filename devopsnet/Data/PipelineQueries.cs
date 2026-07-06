@@ -13,4 +13,15 @@ public static class PipelineQueries
     {
         return query.Where(p => p.UserId == userId);
     }
+    public static int GetMaxNodePort(this IQueryable<Pipeline> query, int defaultStartPort)
+    {
+        // Si la table Pipelines est vide ou qu'aucun port n'a été saisi
+        if (!query.Any())
+        {
+            return defaultStartPort - 1;
+        }
+
+        return query.Max(p => p.NodePort);
+    }
+
 }
