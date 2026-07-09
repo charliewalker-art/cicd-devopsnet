@@ -4,45 +4,43 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build-env
 WORKDIR /app
 
-# 1. Optimisation du cache : On copie d'abord le fichier de projet pour restaurer les packages
-COPY momappdonet/momappdonet.csproj ./momappdonet/
-# Si tu as un projet de test, décommente la ligne suivante :
-# COPY momappdonet.Tests/momappdonet.Tests.csproj ./momappdonet.Tests/
+# 1. Optimisation du cache : On copie d'abord ton fichier projet devopsnet
+COPY devopsnet/devopsnet.csproj ./devopsnet/
 
-# 2. On lance la restauration des packages (mise en cache par Docker)
-RUN dotnet restore momappdonet/momappdonet.csproj
+# 2. On lance la restauration des packages NuGet
+RUN dotnet restore devopsnet/devopsnet.csproj
 
-# 3. Installation de l'outil Entity Framework (version 10 pour correspondre au SDK)
+# 3. Installation d'Entity Framework Core CLI tool
 RUN dotnet tool install --global dotnet-ef --version 10.0.*
 ENV PATH="$PATH:/root/.dotnet/tools"
 
-# 4. Maintenant on copie tout le reste du code source
+# 4. On copie le reste du code source
 COPY . ./
 
-# 5. On supprime les dossiers locaux pour éviter les conflits GitHub Actions
-RUN rm -rf momappdonet/obj momappdonet/bin momappdonet.Tests/obj momappdonet.Tests/bin
+# 5. Nettoyage des résidus locaux pour éviter les conflits
+RUN rm -rf devopsnet/obj devopsnet/bin
 
-# 6. Génération du binaire de migration
-RUN dotnet ef migrations bundle --project momappdonet/momappdonet.csproj -o out/migrate
+# 6. Génération du bundle autonome de migration
+RUN dotnet ef migrations bundle --project devopsnet/devopsnet.csproj -o out/migrate
 
-# 7. Publication de l'application API
-RUN dotnet publish momappdonet/momappdonet.csproj -c Release -o out --no-restore
+# 7. Publication finale de l'API de gestion
+RUN dotnet publish devopsnet/devopsnet.csproj -c Release -o out --no-restore
 
 # ==========================================
-# Étape 2 : Image finale légère pour l'exécution
+# Étape 2 : Image finale d'exécution légère
 # ==========================================
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
-# On récupère l'application et le bundle de migration
+# On récupère les fichiers compilés de l'étape précédente
 COPY --from=build-env /app/out .
 
-#  FIX : On donne explicitement les droits d'exécution au binaire de migration
+# Droits d'exécution pour les migrations automatiques
 RUN chmod +x ./migrate
 
-# On expose le port sur lequel ton API va écouter (Docker Compose / K3s)
+# Alignement sur ton port d'écoute Reverse Proxy
 EXPOSE 7198
 ENV ASPNETCORE_URLS=http://+:7198
 
-# Lancement automatique des migrations puis de l'API
-ENTRYPOINT ./migrate --connection "$ConnectionStrings__PostgresConnection" && dotnet momappdonet.dll
+# Lancement des migrations de la BDD puis démarrage de l'API devopsnet
+ENTRYPOINT ["/bin/sh", "-c", "./migrate --connection \"$ConnectionStrings__PostgresConnection\" && dotnet devopsnet.dll"]
