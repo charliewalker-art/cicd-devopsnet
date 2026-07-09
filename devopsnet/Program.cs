@@ -11,8 +11,12 @@ Env.Load();
 var builder = WebApplication.CreateBuilder(args);
 
 // --- Configuration : injecte les variables d'environnement chargées depuis .env ---
-builder.Configuration["ConnectionStrings:Postgres"] = Environment.GetEnvironmentVariable("POSTGRES_CONNECTION_STRING");
-builder.Configuration["Jwt:SecretKey"] = Environment.GetEnvironmentVariable("JWT_SECRET_KEY");
+builder.Configuration["ConnectionStrings:Postgres"] = Environment.GetEnvironmentVariable("POSTGRES_CONNECTION_STRING")
+    ?? "Host=localhost;Port=5432;Database=design_time;Username=dummy;Password=dummy";
+
+builder.Configuration["Jwt:SecretKey"] = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+    ?? "UneCleSecreteTemporaireDeSecuritePourLeBuildDocker123!";
+
 builder.Configuration["Jwt:ExpirationMinutes"] = Environment.GetEnvironmentVariable("JWT_EXPIRATION_MINUTES");
 builder.Configuration["GitHub:ClientId"] = Environment.GetEnvironmentVariable("GITHUB_CLIENT_ID");
 builder.Configuration["GitHub:ClientSecret"] = Environment.GetEnvironmentVariable("GITHUB_CLIENT_SECRET");
