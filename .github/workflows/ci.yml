@@ -1,0 +1,54 @@
+name: .NET CI & Docker Publish
+
+on:
+  push:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write 
+      packages: write  
+
+    steps:
+      # 1. Récupérer le code du dépôt GitHub
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
+
+      # 2. Générer automatiquement le nouveau numéro de version (v1.0.x)
+      # Note : On le place au début pour que le tag soit prêt pour Docker
+      - name: Bump version and push Git tag
+        id: tag_version
+        uses: anothrNick/github-tag-action@1.64.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: true
+          DEFAULT_BUMP: patch 
+
+      # 3. Se connecter au registre de packages GitHub (GHCR)
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 4. Configurer Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 5. Construire et publier l'image finale (gère la restauration et la compilation via le Dockerfile)
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          #  Utilisation de la mise en cache pour accélérer les builds futurs
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ steps.tag_version.outputs.new_tag }}
+            ghcr.io/${{ github.repository }}:latest

@@ -7,6 +7,6 @@ namespace devopsnet.Services
     public interface IArgoCDService
     {
         Task<List<ArgoApplicationDto>> GetAllApplicationsAsync();
-       //Task<int> CreateApplicationAsync(ArgoApplicationCreateDto dto); // <--- AJOUTE CETTE LIGNE
+       Task<int> CreateApplicationAsync(ArgoApplicationCreateDto dto); // <--- AJOUTE CETTE LIGNE
     }
 }

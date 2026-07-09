@@ -71,7 +71,7 @@ namespace devopsnet.Services
             await File.WriteAllTextAsync(filePath, finalYaml);
 
             // ==========================================
-            // ÉTAPE 3 : Git Commit & Push via LibGit2Sharp
+            // ÉTAPE 3 : Git Commit & Push via LibGit2Sharp (Sécurisé)
             // ==========================================
             try
             {
@@ -79,6 +79,14 @@ namespace devopsnet.Services
                 {
                     // git add [nom_du_fichier]
                     Commands.Stage(repo, fileName);
+
+                    // 💡 FIX : Vérification de l'état du dépôt après le Stage
+                    RepositoryStatus status = repo.RetrieveStatus(new StatusOptions());
+                    if (!status.IsDirty)
+                    {
+                        _logger.LogInformation("Le manifeste pour '{AppName}' existe déjà sans aucune modification. Annulation du commit vide.", appName);
+                        return; // On sort proprement sans crash
+                    }
 
                     // git commit -m "..."
                     var signature = new Signature("devopsnet-api", "api@devops.local", DateTimeOffset.Now);
