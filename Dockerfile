@@ -20,7 +20,7 @@ ENV PATH="$PATH:/root/.dotnet/tools"
 # 5. Génération du bundle autonome
 # Grâce aux changements dans Program.cs, cette commande passe désormais nativement !
 # 5. Génération du bundle autonome (On force le contexte exact)
-RUN dotnet ef migrations bundle --project devopsnet/devopsnet.csproj --startup-project devopsnet/devopsnet.csproj --context devopsnet.Data.AppDbContext -o out/migrate --verbose
+RUN dotnet ef migrations bundle --project devopsnet/devopsnet.csproj --startup-project devopsnet/devopsnet.csproj -o out/migrate --verbose
 
 # 6. Publication finale de l'API
 RUN dotnet publish devopsnet/devopsnet.csproj -c Release -o out --no-restore
