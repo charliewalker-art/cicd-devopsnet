@@ -1,50 +1,37 @@
-# ==========================================
-# Étape 1 : Compilation et création du Bundle
-# ==========================================
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build-env
 WORKDIR /app
 
-# 1. On copie tout le code source
 COPY . ./
-
-# 2. Nettoyage des résidus locaux pour éviter les conflits Windows/Linux
 RUN rm -rf devopsnet/obj devopsnet/bin
-
-# 3. Restauration propre des packages NuGet
 RUN dotnet restore devopsnet/devopsnet.csproj
 
-# 4. Installation de l'outil Entity Framework Core CLI
 RUN dotnet tool install --global dotnet-ef --version 10.0.*
 ENV PATH="$PATH:/root/.dotnet/tools"
 
-# 🔥 LA CORRECTION DE CLAUDE : Injection d'un appsettings.json temporaire
-# .NET lit TOUJOURS ce fichier par défaut au démarrage, sans aucune variable d'environnement.
+# 1. Fichier de config dans le dossier source (sera copié si le SDK est Microsoft.NET.Sdk.Web)
 RUN printf '{\n  "ConnectionStrings": {\n    "PostgresConnection": "Host=localhost;Port=5432;Database=design_time;Username=dummy;Password=dummy"\n  }\n}' > devopsnet/appsettings.json
 
-# 5. Génération du bundle autonome (le Program.cs trouve la chaîne PostgresConnection dans le JSON)
-RUN dotnet ef migrations bundle --project devopsnet/devopsnet.csproj --startup-project devopsnet/devopsnet.csproj -o out/migrate --verbose
+# 2. Build explicite AVANT le bundle, pour matérialiser le dossier de sortie
+RUN dotnet build devopsnet/devopsnet.csproj -c Release --no-restore
 
-# Nettoyage immédiat pour ne pas embarquer ce fichier temporaire dans la publication finale
+# 3. Copie défensive dans TOUS les dossiers de sortie possibles (Debug et Release, au cas où)
+RUN find devopsnet/bin -type d -name "net*.0" -exec cp devopsnet/appsettings.json {} \; ; \
+    find devopsnet -type d -iname "Debug" -o -iname "Release" 2>/dev/null || true
+
+# 4. On se place directement dans le dossier du projet pour éliminer toute ambiguïté de working directory
+WORKDIR /app/devopsnet
+RUN dotnet ef migrations bundle --project devopsnet.csproj --startup-project devopsnet.csproj -o ../out/migrate --verbose
+
+WORKDIR /app
 RUN rm devopsnet/appsettings.json
 
-# 6. Publication finale de l'API
 RUN dotnet publish devopsnet/devopsnet.csproj -c Release -o out --no-restore
 
-# ==========================================
-# Étape 2 : Image finale légère pour l'exécution
-# ==========================================
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
-
-# On récupère l'API publiée et le bundle migrate
 COPY --from=build-env /app/out .
-
-# Droits d'exécution pour le binaire de migration automatique
 RUN chmod +x ./migrate
-
-# Alignement sur ton port d'écoute 7198
 EXPOSE 7198
 ENV ASPNETCORE_URLS=http://+:7198
 
-# Au runtime, la vraie variable d'environnement de production prendra le relais
 ENTRYPOINT ["/bin/sh", "-c", "./migrate --connection \"$ConnectionStrings__PostgresConnection\" && dotnet devopsnet.dll"]
