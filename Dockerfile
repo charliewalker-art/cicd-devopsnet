@@ -4,31 +4,25 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build-env
 WORKDIR /app
 
-# 1. On copie d'abord ton fichier projet devopsnet pour le cache
-COPY devopsnet/devopsnet.csproj ./devopsnet/
+# 1. On copie tout le code source d'un coup
+COPY . ./
 
-# 2. On lance la restauration des packages NuGet
+# 2.  FIX CRITIQUE : On nettoie les dossiers de ta machine AVANT de restaurer
+# Comme ça, on ne détruit pas le travail de dotnet restore
+RUN rm -rf devopsnet/obj devopsnet/bin
+
+# 3. On lance la restauration propre des packages dans le conteneur
 RUN dotnet restore devopsnet/devopsnet.csproj
 
-# 3. Installation d'Entity Framework Core CLI tool
+# 4. Installation d'Entity Framework Core CLI tool
 RUN dotnet tool install --global dotnet-ef --version 10.0.*
 ENV PATH="$PATH:/root/.dotnet/tools"
 
-# 4. On copie le reste du code source complet
-COPY . ./
+# 5. Génération du bundle (on pointe explicitement le projet depuis la racine)
+RUN dotnet ef migrations bundle --project devopsnet/devopsnet.csproj --startup-project devopsnet/devopsnet.csproj -o out/migrate --verbose
 
-# 5. Nettoyage des résidus locaux pour éviter les conflits
-RUN rm -rf devopsnet/obj devopsnet/bin
-
-#  CORRECTION ICI : On se déplace dans le dossier de ton projet .NET
-WORKDIR /app/devopsnet
-
-# 6. Génération du bundle (plus besoin de spécifier --project car on est dedans !)
-# Le résultat est envoyé dans '../out/migrate' (donc dans /app/out/migrate)
-RUN dotnet ef migrations bundle -o ../out/migrate --verbose
-
-# 7. Publication finale de l'API de gestion dans '../out' (donc dans /app/out)
-RUN dotnet publish devopsnet.csproj -c Release -o ../out --no-restore
+# 6. Publication finale de l'API de gestion
+RUN dotnet publish devopsnet/devopsnet.csproj -c Release -o out --no-restore
 
 # ==========================================
 # Étape 2 : Image finale d'exécution légère
@@ -36,15 +30,15 @@ RUN dotnet publish devopsnet.csproj -c Release -o ../out --no-restore
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
-# On récupère les fichiers compilés qui sont bien dans /app/out
+# On récupère les fichiers compilés (l'API + le bundle migrate)
 COPY --from=build-env /app/out .
 
-# Droits d'exécution pour les migrations automatiques
+# Droits d'exécution pour le binaire de pré-déploiement
 RUN chmod +x ./migrate
 
-# Alignement sur ton port d'écoute Reverse Proxy
+# Configuration du port d'écoute
 EXPOSE 7198
 ENV ASPNETCORE_URLS=http://+:7198
 
-# Lancement des migrations de la BDD puis démarrage de l'API devopsnet
+# Exécution des migrations puis démarrage de l'API devopsnet
 ENTRYPOINT ["/bin/sh", "-c", "./migrate --connection \"$ConnectionStrings__PostgresConnection\" && dotnet devopsnet.dll"]
