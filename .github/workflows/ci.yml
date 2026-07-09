@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 
+          submodules: false
 
       # 2. Générer automatiquement le nouveau numéro de version (v1.0.x)
       # Note : On le place au début pour que le tag soit prêt pour Docker

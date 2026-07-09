@@ -21,7 +21,7 @@ COPY . ./
 RUN rm -rf devopsnet/obj devopsnet/bin
 
 # 6. Génération du bundle autonome de migration
-RUN dotnet ef migrations bundle --project devopsnet/devopsnet.csproj -o out/migrate
+RUN dotnet ef migrations bundle --project devopsnet/devopsnet.csproj -o out/migrate --verbose
 
 # 7. Publication finale de l'API de gestion
 RUN dotnet publish devopsnet/devopsnet.csproj -c Release -o out --no-restore
