@@ -48,8 +48,16 @@ builder.Configuration["K3S_NODEPORT_START"] = Environment.GetEnvironmentVariable
 
 
 // --- Base de données ---
+var connectionString = builder.Configuration["ConnectionStrings:Postgres"];
+
+// Sécurité pour Docker : si la chaîne est vide/null au build, on met une chaîne fictive pour éviter le crash d'EF Core
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    connectionString = "Host=localhost;Port=5432;Database=design_time;Username=dummy;Password=dummy";
+}
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration["ConnectionStrings:Postgres"]));
+    options.UseNpgsql(connectionString));
 
 // --- Options fortement typées ---
 builder.Services.Configure<GitHubOptions>(builder.Configuration.GetSection(GitHubOptions.SectionName));
