@@ -14,11 +14,16 @@ public class GitHubAuthController : ControllerBase
 {
     private readonly GitHubAuthService _gitHubAuthService;
     private readonly GitHubOptions _options;
+    private readonly IConfiguration _configuration;
 
-    public GitHubAuthController(GitHubAuthService gitHubAuthService, IOptions<GitHubOptions> options)
+    public GitHubAuthController(
+        GitHubAuthService gitHubAuthService,
+        IOptions<GitHubOptions> options,
+        IConfiguration configuration)
     {
         _gitHubAuthService = gitHubAuthService;
         _options = options.Value;
+        _configuration = configuration;
     }
 
     [Authorize]
@@ -39,19 +44,21 @@ public class GitHubAuthController : ControllerBase
     [HttpGet("callback")]
     public async Task<IActionResult> Callback([FromQuery] GitHubCallbackDto dto, [FromQuery] string state)
     {
+        var frontendUrl = _configuration["Cors:AllowedOrigin"];
+
         if (!Guid.TryParse(state, out var userId))
         {
-            return Redirect("http://localhost:5173/repositories?github=error&message=Etat+invalide.");
+            return Redirect($"{frontendUrl}/repositories?github=error&message=Etat+invalide.");
         }
 
         try
         {
             await _gitHubAuthService.LinkAccountAsync(userId, dto.Code);
-            return Redirect("http://localhost:5173/repositories?github=linked");
+            return Redirect($"{frontendUrl}/repositories?github=linked");
         }
         catch (InvalidOperationException ex)
         {
-            return Redirect($"http://localhost:5173/repositories?github=error&message={Uri.EscapeDataString(ex.Message)}");
+            return Redirect($"{frontendUrl}/repositories?github=error&message={Uri.EscapeDataString(ex.Message)}");
         }
     }
 
